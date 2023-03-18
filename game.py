@@ -5,6 +5,7 @@ import time
 import errno
 import tkinter as tk
 import random
+import pickle
 GAME_PORT = 5007
 def moveBaseLR(c,base, direction, x, y = 0):
     x1, y1, x2, y2 = c.coords(base)
@@ -15,7 +16,7 @@ def moveBaseLR(c,base, direction, x, y = 0):
 def key_press(event,game_socket):
   #print("a\n"*10)
   a = str(event.keycode)
-  print(a)
+  #print(a)
   game_socket.send(a.encode())
   #print("sent")
 
@@ -44,16 +45,18 @@ def update_game_state(player, move,base,c):
   if(move ):
     if(( move.lstrip('g'))):
       if(move.lstrip('g').rstrip('g')):
-       print(move.lstrip('g').rstrip('g'))
+         pass
+       #print(move.lstrip('g').rstrip('g'))
   # update the board
   if(int(move) == 37):
        moveBaseLR(c,base, 'l', 0-10)
+
   if(int(move) == 39):
        moveBaseLR(c,base, 'r', 10)
   
   if 'g' not in move:
     board = board + move
-    print(player + ' played ' + move)
+    #print(player + ' played ' + move)
     
 
 def has_game_ended():
@@ -96,8 +99,8 @@ def game_server():
         txtS2 = tk.Entry(c, text='1')
         txtScore = c.create_window(380, 180, anchor='nw', window=txtS)
         txtScore2 = c.create_window(380, 200, anchor='nw', window=txtS2)
-        lblM = tk.Label(c, text='Failed!!!Press Enter key to start again')
-        lblID = c.create_window(100, 190, anchor='nw', window=lblM)
+        lblM = tk.Label(c, text='Game Over')
+        lblID = c.create_window(100, 200, anchor='nw', window=lblM)
         c.itemconfigure(lblID, state='hidden')
        
         root.bind('<Key>', lambda event: key_press2(event,game_socket,base,c),(game_socket,base,c))
@@ -110,6 +113,8 @@ def game_server():
           
 
           l, t, r, b = c.coords(ball)
+          
+          
           txtS.delete(0, END)
           #txtS2.delete(0, END)
           txtS.insert(0, str(score1))
@@ -139,6 +144,10 @@ def game_server():
                   isFailed = True
                   score1 = score1+1
                   print(score1,score2)
+                  if(score1 > score2):
+                     print("Opponent won")
+                  else:
+                     print("you won")
                   txtS.delete(0, END)
                   #txtS2.delete(0, END)
                   txtS.insert(0, str(score1))
@@ -155,6 +164,10 @@ def game_server():
                   c.itemconfigure(lblID, state='normal')
                   score2 = score2+1
                   print(score1,score2)
+                  if(score1 > score2):
+                     print("Opponent won")
+                  else:
+                     print("you won")
                   isFailed = True
                   
                   txtS2.delete(0, END)
@@ -162,17 +175,24 @@ def game_server():
                   txtS2.insert(0, str(score2))
                   break
         
-          time.sleep(.025)
+          time.sleep(0.025)
           c.move(ball, x, y)
           c.update()
+          aa,bb,cc,dd = c.coords(ball)
+          x11,y11,x21,y21 = c.coords(base)
+          x12,y12,x22,y22 = c.coords(base2)
+          li=[aa,bb,x11,y11,x12,y12]
+          
+          data_string = pickle.dumps(li)
+          game_socket.send(data_string)
           root.update()
-          print("c1")
+          #print("c1")
           try :
             opp_move = game_socket.recv(1024)
           except socket.error as e:
             if e.errno == errno.EAGAIN or e.errno == errno.EWOULDBLOCK:
               continue
-          print("c2")
+          #print("c2")
         
         # if not opp_move:
         #   break
@@ -190,19 +210,56 @@ def game_client(opponent):
       game_socket.setblocking(False)
       print('Game Started')
 
-      root2 = Tk()
-      root2.geometry('200x100')
-      root2.bind('<Key>', lambda event: key_press(event,game_socket),game_socket)
+      root = Tk()
+      score1 = 0
+      score2 = 0
+      root.minsize(400,400)
+      basespeed = 10
+      ballspeed = 1
+      
+      isFailed = False
+
+      c = Canvas(width=400, height=400, background='#000')
+      coordinates = 0,200,400,200
+
+  # Draw a dashed vertical line, 5px dash and 1px space
+      c.create_line(coordinates, dash=(5,1), fill="white")
+      c.pack()
+      base = c.create_rectangle(150, 385, 250, 400, fill='blue', outline='blue')
+      base2 =  c.create_rectangle(150, 0, 250, 20, fill='blue', outline='blue')
+      ball = c.create_oval(190, 365, 210, 385, fill='red', outline='red')    
+      txtS = tk.Entry(c, text='2')
+      txtS2 = tk.Entry(c, text='1')
+      txtScore = c.create_window(380, 180, anchor='nw', window=txtS)
+      txtScore2 = c.create_window(380, 200, anchor='nw', window=txtS2)
+      lblM = tk.Label(c, text='Game Over')
+      lblID = c.create_window(100, 190, anchor='nw', window=lblM)
+      c.itemconfigure(lblID, state='hidden')
+       
+      
+      root.bind('<Key>', lambda event: key_press(event,game_socket),game_socket)
 
       while True:
 
 
         
-        root2.update()
+        root.update()
+        #print("ye exec")
         #print_current_board()
         
         try :
-          opp_move = game_socket.recv(1024)
+          data = game_socket.recv(1024)
+          try:
+            li = pickle.loads(data)
+            c.moveto(ball,li[0],li[1])
+            c.moveto(base,li[2],li[3])
+            c.moveto(base2,li[4],li[5])
+            c.update()
+          except EOFError:
+             print("game over")
+             break
+             
+
         except socket.error as e:
           if e.errno == errno.EAGAIN or e.errno == errno.EWOULDBLOCK:
             continue
@@ -214,7 +271,7 @@ def game_client(opponent):
         
         if has_game_ended():
           break
-        time.sleep(0.25)
+        time.sleep(0.025)
 
   #print_current_board()
   print('Game ended')
